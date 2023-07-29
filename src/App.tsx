@@ -7,7 +7,8 @@ import './App.css';
  * State declaration for <App />
  */
 interface IState {
-  data: ServerRespond[],
+  data: ServerRespond[];
+  showGraph: boolean;
 }
 
 /**
@@ -15,13 +16,14 @@ interface IState {
  * It renders title, button and Graph react element.
  */
 class App extends Component<{}, IState> {
+  private interval: NodeJS.Timeout | null = null; // Store the interval ID
+
   constructor(props: {}) {
     super(props);
 
     this.state = {
-      // data saves the server responds.
-      // We use this state to parse data down to the child element (Graph) as element property
       data: [],
+      showGraph: false, // Set the initial value of showGraph to false
     };
   }
 
@@ -29,18 +31,47 @@ class App extends Component<{}, IState> {
    * Render Graph react component with state.data parse as property data
    */
   renderGraph() {
-    return (<Graph data={this.state.data}/>)
+    if (this.state.showGraph) {
+      return <Graph data={this.state.data} />;
+    } else {
+      return null;
+    }
   }
 
   /**
-   * Get new data from server and update the state with the new data
+   * Get new data from the server and update the state with the new data
+   * continuously until the app is closed or the server does not return any more data.
    */
   getDataFromServer() {
-    DataStreamer.getData((serverResponds: ServerRespond[]) => {
-      // Update the state by creating a new array of data that consists of
-      // Previous data in the state and the new data from server
-      this.setState({ data: [...this.state.data, ...serverResponds] });
-    });
+    // Clear any existing interval before starting a new one
+    this.stopStreaming(); // Clear any existing interval before starting a new one
+
+    // Start a new interval to fetch data every 100ms
+    this.interval = setInterval(() => {
+      DataStreamer.getData((serverResponds: ServerRespond[]) => {
+        // Check if there is any data returned from the server
+        if (serverResponds.length > 0) {
+          // Update the state with the new data
+          this.setState((prevState) => ({
+            data: [...prevState.data, ...serverResponds],
+            showGraph: true,
+          }));
+        } else {
+          // If there is no data returned from the server, stop streaming
+          this.stopStreaming();
+        }
+      });
+    }, 100);
+  }
+
+  /**
+   * Stop streaming data by clearing the interval.
+   */
+  stopStreaming() {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
   }
 
   /**
@@ -49,25 +80,20 @@ class App extends Component<{}, IState> {
   render() {
     return (
       <div className="App">
-        <header className="App-header">
-          Bank & Merge Co Task 2
-        </header>
+        <header className="App-header">Bank & Merge Co Task 2</header>
         <div className="App-content">
-          <button className="btn btn-primary Stream-button"
-            // when button is click, our react app tries to request
-            // new data from the server.
-            // As part of your task, update the getDataFromServer() function
-            // to keep requesting the data every 100ms until the app is closed
-            // or the server does not return anymore data.
-            onClick={() => {this.getDataFromServer()}}>
+          <button
+            className="btn btn-primary Stream-button"
+            onClick={() => {
+              this.getDataFromServer();
+            }}
+          >
             Start Streaming Data
           </button>
-          <div className="Graph">
-            {this.renderGraph()}
-          </div>
+          <div className="Graph">{this.renderGraph()}</div>
         </div>
       </div>
-    )
+    );
   }
 }
 
